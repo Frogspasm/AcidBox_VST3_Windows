@@ -6,40 +6,59 @@ const char* const kDrumNames[5] = {"Kick", "Snare", "Clap", "Closed hat", "Open 
 const int kDrumBits[5] = {acid::Kick, acid::Snare, acid::Clap, acid::ClosedHat, acid::OpenHat};
 bool isBlack(int k) { const int m = k % 12; return m == 1 || m == 3 || m == 6 || m == 8 || m == 10; }
 juce::String letter(int i) { return juce::String::charToString((juce::juce_wchar) ('A' + i)); }
+
+// remembers your last skin, so new AcidBox instances open with it
+std::unique_ptr<juce::PropertiesFile> settingsFile() {
+    juce::PropertiesFile::Options o;
+    o.applicationName = "AcidBox";
+    o.filenameSuffix = ".settings";
+    o.folderName = "AcidBox";
+    o.osxLibrarySubFolder = "Application Support";
+    return std::make_unique<juce::PropertiesFile>(o);
+}
 } // namespace
 
 // ---------------------------------------------------------------- look
-AcidLook::AcidLook() {
-    setColour(juce::ResizableWindow::backgroundColourId, ui::butter);
-    setColour(juce::Label::textColourId, ui::ink);
-    setColour(juce::Slider::textBoxTextColourId, ui::ink);
+AcidLook::AcidLook() { setPalette(ui::resolve(1, false)); }
+
+void AcidLook::setPalette(const ui::Palette& p) {
+    pal = p;
+    setColour(juce::ResizableWindow::backgroundColourId, p.bg);
+    setColour(juce::Label::textColourId, p.ink);
+    setColour(juce::Slider::textBoxTextColourId, p.ink);
     setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     setColour(juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
-    setColour(juce::Slider::textBoxHighlightColourId, ui::led.withAlpha(0.4f));
-    setColour(juce::Slider::thumbColourId, ui::led);
-    setColour(juce::Slider::trackColourId, ui::ink);
-    setColour(juce::Slider::backgroundColourId, ui::ink.withAlpha(0.2f));
-    setColour(juce::ComboBox::backgroundColourId, ui::ink);
-    setColour(juce::ComboBox::textColourId, ui::butter);
+    setColour(juce::Slider::textBoxHighlightColourId, p.led.withAlpha(0.4f));
+    setColour(juce::Slider::thumbColourId, p.led);
+    setColour(juce::Slider::trackColourId, p.ink);
+    setColour(juce::Slider::backgroundColourId, p.ink.withAlpha(0.2f));
+    setColour(juce::ComboBox::backgroundColourId, p.bar);
+    setColour(juce::ComboBox::textColourId, p.bg);
     setColour(juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
-    setColour(juce::ComboBox::arrowColourId, ui::butter);
-    setColour(juce::PopupMenu::backgroundColourId, ui::ink);
-    setColour(juce::PopupMenu::textColourId, ui::butter);
-    setColour(juce::PopupMenu::highlightedBackgroundColourId, ui::led);
-    setColour(juce::PopupMenu::highlightedTextColourId, juce::Colours::white);
-    setColour(juce::TextButton::buttonColourId, ui::ink);
-    setColour(juce::TextButton::buttonOnColourId, ui::led);
-    setColour(juce::TextButton::textColourOffId, ui::butter);
-    setColour(juce::TextButton::textColourOnId, juce::Colours::white);
-    setColour(juce::ToggleButton::textColourId, ui::ink);
-    setColour(juce::ToggleButton::tickColourId, ui::ink);
-    setColour(juce::ToggleButton::tickDisabledColourId, ui::ink.withAlpha(0.4f));
-    setColour(juce::TabbedButtonBar::tabTextColourId, ui::ink.withAlpha(0.7f));
-    setColour(juce::TabbedButtonBar::frontTextColourId, ui::ink);
-    setColour(juce::TabbedButtonBar::tabOutlineColourId, ui::ink.withAlpha(0.3f));
-    setColour(juce::TabbedButtonBar::frontOutlineColourId, ui::ink);
-    setColour(juce::TabbedComponent::backgroundColourId, ui::butter);
-    setColour(juce::TabbedComponent::outlineColourId, ui::ink.withAlpha(0.3f));
+    setColour(juce::ComboBox::arrowColourId, p.bg);
+    setColour(juce::PopupMenu::backgroundColourId, p.panel);
+    setColour(juce::PopupMenu::textColourId, p.ink);
+    setColour(juce::PopupMenu::highlightedBackgroundColourId, p.led);
+    setColour(juce::PopupMenu::highlightedTextColourId, p.onLed);
+    setColour(juce::TextButton::buttonColourId, p.bar);
+    setColour(juce::TextButton::buttonOnColourId, p.led);
+    setColour(juce::TextButton::textColourOffId, p.bg);
+    setColour(juce::TextButton::textColourOnId, p.onLed);
+    setColour(juce::ToggleButton::textColourId, p.ink);
+    setColour(juce::ToggleButton::tickColourId, p.ink);
+    setColour(juce::ToggleButton::tickDisabledColourId, p.ink.withAlpha(0.4f));
+    setColour(juce::TabbedButtonBar::tabTextColourId, p.ink.withAlpha(0.7f));
+    setColour(juce::TabbedButtonBar::frontTextColourId, p.ink);
+    setColour(juce::TabbedButtonBar::tabOutlineColourId, p.ink.withAlpha(0.3f));
+    setColour(juce::TabbedButtonBar::frontOutlineColourId, p.ink);
+    setColour(juce::TabbedComponent::backgroundColourId, p.bg);
+    setColour(juce::TabbedComponent::outlineColourId, p.ink.withAlpha(0.3f));
+    setColour(juce::PopupMenu::headerTextColourId, p.soft);
+    setColour(juce::Label::textWhenEditingColourId, p.ink);
+    setColour(juce::TextEditor::textColourId, p.ink);
+    setColour(juce::TextEditor::backgroundColourId, p.cell);
+    setColour(juce::TextEditor::highlightColourId, p.led.withAlpha(0.4f));
+    setColour(juce::CaretComponent::caretColourId, p.ink);
 }
 
 void AcidLook::drawRotarySlider(juce::Graphics& g, int x, int y, int w, int h, float pos, float startA, float endA, juce::Slider&) {
@@ -51,17 +70,17 @@ void AcidLook::drawRotarySlider(juce::Graphics& g, int x, int y, int w, int h, f
 
     juce::Path track;
     track.addCentredArc(c.x, c.y, r, r, 0.0f, startA, endA, true);
-    g.setColour(ui::ink.withAlpha(0.2f));
+    g.setColour(pal.track);
     g.strokePath(track, stroke);
     juce::Path value;
     value.addCentredArc(c.x, c.y, r, r, 0.0f, startA, ang, true);
-    g.setColour(ui::led);
+    g.setColour(pal.led);
     g.strokePath(value, stroke);
 
     const float br = juce::jmax(2.0f, r - 6.0f);
-    g.setColour(ui::ink);
+    g.setColour(pal.knobBody);
     g.fillEllipse(c.x - br, c.y - br, br * 2, br * 2);
-    g.setColour(ui::butter);
+    g.setColour(pal.knobMark);
     g.drawLine(c.x + std::sin(ang) * br * 0.3f, c.y - std::cos(ang) * br * 0.3f,
                c.x + std::sin(ang) * (br - 3), c.y - std::cos(ang) * (br - 3), 2.5f);
 }
@@ -88,15 +107,16 @@ Knob::Knob(AcidBoxProcessor& p, const juce::String& id, const juce::String& labe
 
 // a small "CC 74" badge shows which controller moves this knob; a red frame while it waits for MIDI Learn
 void Knob::paintOverChildren(juce::Graphics& g) {
+    const auto& P = palOf(*this);
     if (index >= 0 && proc.armedIndex() == index) {
-        g.setColour(ui::led);
+        g.setColour(P.led);
         g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(1.0f), 8.0f, 2.0f);
     }
     int cc = proc.learnedCC(index);
     const bool mine = cc >= 0;
     if (!mine) cc = proc.builtinCC(index);
     if (cc < 0) return;
-    g.setColour(mine ? ui::led : ui::ink.withAlpha(0.45f));
+    g.setColour(mine ? P.led : P.soft);
     g.setFont(ui::font(9.0f, true));
     g.drawText("CC " + juce::String(cc), getWidth() - 34, 15, 32, 11, juce::Justification::centredRight);
 }
@@ -106,6 +126,7 @@ void Knob::mouseDown(const juce::MouseEvent& e) {
     const int lc = proc.learnedCC(index), bc = proc.builtinCC(index);
     const bool armed = proc.armedIndex() == index;
     juce::PopupMenu m;
+    m.setLookAndFeel(&getLookAndFeel());   // menus follow the skin too
     m.addSectionHeader(proc.param(index)->getName(40));
     m.addItem(1, armed ? "Cancel MIDI Learn" : "MIDI Learn (then move a control)");
     if (lc >= 0) m.addItem(2, "Forget CC " + juce::String(lc));
@@ -159,9 +180,10 @@ void Choice::resized() {
 }
 
 void Section::paint(juce::Graphics& g) {
-    g.setColour(ui::ink.withAlpha(0.6f));
+    const auto& P = palOf(*this);
+    g.setColour(P.ink.withAlpha(0.45f));
     g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(1.0f), 8.0f, 1.5f);
-    g.setColour(ui::ink);
+    g.setColour(P.ink);
     g.setFont(ui::font(11.0f, true));
     g.drawText(title.toUpperCase(), getLocalBounds().reduced(10, 5).removeFromTop(14), juce::Justification::centredLeft);
 }
@@ -234,6 +256,12 @@ void SeqView::resized() {
 }
 
 void SeqView::paint(juce::Graphics& g) {
+    const auto& P = palOf(*this);
+    const auto stripe = P.cell.interpolatedWith(P.ink, 0.08f);   // every other group of four steps
+    auto readable = [&](juce::Colour bg) {   // whichever of ink and background stands out more on bg
+        const float b = bg.getPerceivedBrightness();
+        return std::abs(P.ink.getPerceivedBrightness() - b) >= std::abs(P.bg.getPerceivedBrightness() - b) ? P.ink : P.bg;
+    };
     const auto q = proc.getSeq();
     const bool running = proc.running.load();
     const int playStep = running ? proc.uiStep.load() : -1;
@@ -241,22 +269,22 @@ void SeqView::paint(juce::Graphics& g) {
     const int playBank = proc.uiBank.load(), playDBank = proc.uiDBank.load();
     const auto& cur = q.banks[editBank][sel];
 
-    g.setColour(ui::navy);
+    g.setColour(P.panel);
     g.fillRoundedRectangle(getLocalBounds().toFloat(), 12.0f);
 
     auto label = [&](juce::Rectangle<int> r, const juce::String& t) {
-        g.setColour(ui::butter.withAlpha(0.75f));
+        g.setColour(P.soft);
         g.setFont(ui::font(11.0f, true));
         g.drawText(t, r, juce::Justification::centredLeft);
     };
     auto button = [&](juce::Rectangle<int> r, const juce::String& t, bool on, bool lit = false) {
         const auto f = r.toFloat();
-        g.setColour(on ? ui::butter : ui::soft);
+        g.setColour(on ? P.bar : P.cell);
         g.fillRoundedRectangle(f, 5.0f);
-        g.setColour(on ? ui::ink : ui::butter);
+        g.setColour(on ? P.bg : P.ink);
         g.setFont(ui::font(13.0f, true));
         g.drawText(t, r, juce::Justification::centred);
-        if (lit) { g.setColour(ui::led); g.fillEllipse(f.getRight() - 8.0f, f.getY() + 3.0f, 5.0f, 5.0f); }
+        if (lit) { g.setColour(P.led); g.fillEllipse(f.getRight() - 8.0f, f.getY() + 3.0f, 5.0f, 5.0f); }
     };
 
     label(bassBankLabel, "BASS");
@@ -273,19 +301,19 @@ void SeqView::paint(juce::Graphics& g) {
     for (int i = 0; i < 16; ++i) {
         const auto& s = q.banks[editBank][i];
         const auto f = steps[i].toFloat();
-        g.setColour((i / 4) % 2 ? ui::soft : ui::soft.brighter(0.15f));
+        g.setColour((i / 4) % 2 ? P.cell : stripe);
         g.fillRoundedRectangle(f, 6.0f);
-        if (i == playStep) { g.setColour(ui::led.withAlpha(0.35f)); g.fillRoundedRectangle(f, 6.0f); }
-        if (i == sel) { g.setColour(ui::butter); g.drawRoundedRectangle(f.reduced(1.0f), 6.0f, 2.0f); }
-        g.setColour(s.r ? ui::butter.withAlpha(0.3f) : ui::butter);
+        if (i == playStep) { g.setColour(P.led.withAlpha(0.35f)); g.fillRoundedRectangle(f, 6.0f); }
+        if (i == sel) { g.setColour(P.ink); g.drawRoundedRectangle(f.reduced(1.0f), 6.0f, 2.0f); }
+        g.setColour(s.r ? P.soft.withAlpha(0.6f) : P.ink);
         g.setFont(ui::font(15.0f, true));
         g.drawText(s.r ? juce::String("-") : juce::String(kNoteNames[s.n]), steps[i].withTrimmedBottom(16), juce::Justification::centred);
         if (!s.r) {
             auto badges = steps[i].withTrimmedTop(30).reduced(4, 0);
             g.setFont(ui::font(10.0f, true));
-            if (s.o != 0) { g.setColour(ui::butter.withAlpha(0.7f)); g.drawText(s.o > 0 ? "hi" : "lo", badges, juce::Justification::centredLeft); }
-            if (s.a) { g.setColour(ui::led); g.drawText("A", badges, juce::Justification::centred); }
-            if (s.s) { g.setColour(ui::butter); g.drawText("S", badges, juce::Justification::centredRight); }
+            if (s.o != 0) { g.setColour(P.soft); g.drawText(s.o > 0 ? "hi" : "lo", badges, juce::Justification::centredLeft); }
+            if (s.a) { g.setColour(P.led); g.drawText("A", badges, juce::Justification::centred); }
+            if (s.s) { g.setColour(P.ink); g.drawText("S", badges, juce::Justification::centredRight); }
         }
     }
 
@@ -294,14 +322,14 @@ void SeqView::paint(juce::Graphics& g) {
     for (int k = 0; k < 13; ++k) {
         const bool on = !cur.r && cur.n == k;
         const auto f = keys[k].toFloat();
-        g.setColour(on ? ui::led : isBlack(k) ? ui::ink : ui::butter.withAlpha(0.9f));
+        g.setColour(on ? P.keySel : isBlack(k) ? P.keyBlack : P.keyWhite);
         g.fillRoundedRectangle(f, 4.0f);
-        g.setColour(on ? juce::Colours::white : isBlack(k) ? ui::butter : ui::ink);
+        g.setColour(on ? P.onLed : readable(isBlack(k) ? P.keyBlack : P.keyWhite));
         g.setFont(ui::font(11.0f, true));
         g.drawText(kNoteNames[k], keys[k].withTrimmedTop(20), juce::Justification::centred);
     }
     button(octDown, "-", false);
-    g.setColour(ui::butter);
+    g.setColour(P.ink);
     g.setFont(ui::font(12.0f, true));
     g.drawText(cur.o > 0 ? "Oct high" : cur.o < 0 ? "Oct low" : "Oct mid", octLabel, juce::Justification::centred);
     button(octUp, "+", false);
@@ -315,9 +343,9 @@ void SeqView::paint(juce::Graphics& g) {
         for (int i = 0; i < 16; ++i) {
             const bool on = (q.drums[editDBank][i] & kDrumBits[d]) != 0;
             const auto f = drumCells[d][i].toFloat();
-            g.setColour(on ? ui::led : ((i / 4) % 2 ? ui::soft : ui::soft.brighter(0.15f)));
+            g.setColour(on ? P.led : ((i / 4) % 2 ? P.cell : stripe));
             g.fillRoundedRectangle(f, 4.0f);
-            if (i == playStep) { g.setColour(ui::butter.withAlpha(0.6f)); g.drawRoundedRectangle(f.reduced(0.5f), 4.0f, 1.5f); }
+            if (i == playStep) { g.setColour(P.ink.withAlpha(0.6f)); g.drawRoundedRectangle(f.reduced(0.5f), 4.0f, 1.5f); }
         }
     }
 
@@ -328,23 +356,23 @@ void SeqView::paint(juce::Graphics& g) {
         const auto f = chainCells[i].toFloat();
         if (i < q.chainLen) {
             const bool now = q.songOn && playBar == i;
-            g.setColour(now ? ui::led : ui::soft);
+            g.setColour(now ? P.led : P.cell);
             g.fillRoundedRectangle(f, 5.0f);
-            g.setColour(ui::butter);
+            g.setColour(now ? P.onLed : P.ink);
             g.setFont(ui::font(13.0f, true));
             g.drawText(letter(q.chain[i].b), chainCells[i].withTrimmedBottom(12), juce::Justification::centred);
-            g.setColour(ui::butter.withAlpha(0.6f));
+            g.setColour(now ? P.onLed : P.soft);
             g.setFont(ui::font(9.0f, true));
             g.drawText("drums " + letter(q.chain[i].d), chainCells[i].withTrimmedTop(17), juce::Justification::centred);
         } else if (i == q.chainLen) {
-            g.setColour(ui::butter.withAlpha(0.4f));
+            g.setColour(P.soft);
             g.drawRoundedRectangle(f.reduced(1.0f), 5.0f, 1.0f);
             g.setFont(ui::font(16.0f, true));
             g.drawText("+", chainCells[i], juce::Justification::centred);
         }
     }
 
-    g.setColour(ui::butter.withAlpha(0.55f));
+    g.setColour(P.soft);
     g.setFont(ui::font(11.0f));
     g.drawText("Click a step, then a key to set its note. Click a song bar to change its bass pattern, right-click for its drums. "
                "MIDI notes from your DAW play the bass live.",
@@ -449,10 +477,12 @@ AcidBoxEditor::AcidBoxEditor(AcidBoxProcessor& p)
     drumPage.section("Closed hat").knob("chtune", "Tune").knob("chtone", "Tone").knob("chdecay", "Decay").knob("chnoise", "Noise");
     drumPage.section("Open hat").knob("ohtune", "Tune").knob("ohtone", "Tone").knob("ohdecay", "Decay").knob("ohnoise", "Noise");
 
-    const auto tabBg = ui::butter.darker(0.06f);
+    const auto tabBg = look.pal.panel;
     tabs.addTab("Bass", tabBg, &bassPage, false);
     tabs.addTab("Effects", tabBg, &fxPage, false);
     tabs.addTab("Drums", tabBg, &drumPage, false);
+    tabs.addTab("Skins", tabBg, &skinPage, false);
+    skinPage.onPick = [this](int i) { applySkin(i); };
     tabs.setTabBarDepth(28);
     tabs.setOutline(0);
     addAndMakeVisible(tabs);
@@ -478,8 +508,108 @@ AcidBoxEditor::AcidBoxEditor(AcidBoxProcessor& p)
     status.setMinimumHorizontalScale(0.6f);
     addAndMakeVisible(status);
 
+    int skin = proc.skinIndex.load();
+    if (skin < 0) skin = settingsFile()->getIntValue("skin", 0);
+    applySkin(skin);
+
     setSize(1040, 720);
     startTimerHz(30);
+}
+
+void AcidBoxEditor::applySkin(int index) {
+    index = juce::jlimit(0, (int) ui::skins().size() - 1, index);
+    const bool changed = proc.skinIndex.load() != index;
+    proc.skinIndex = index;
+    skinPage.selected = index;
+    appliedDark = juce::Desktop::getInstance().isDarkModeActive();
+    look.setPalette(ui::resolve(index, appliedDark));
+    for (int t = 0; t < tabs.getNumTabs(); ++t) tabs.setTabBackgroundColour(t, look.pal.panel);
+    sendLookAndFeelChange();
+    repaint();
+    if (changed) {
+        auto f = settingsFile();
+        f->setValue("skin", index);
+        f->saveIfNeeded();
+    }
+}
+
+// ---------------------------------------------------------------- skins tab
+void SkinPage::resized() {
+    swatches.clear();
+    const auto r = getLocalBounds().reduced(14, 10);
+    const int w = 100, h = 92, gap = 10;
+    int x = r.getX(), y = r.getY() + 30;
+    for (size_t i = 0; i < ui::skins().size(); ++i) {
+        if (x + w > r.getRight()) { x = r.getX(); y += h + gap; }
+        swatches.push_back({x, y, w, h});
+        x += w + gap;
+    }
+}
+
+void SkinPage::paint(juce::Graphics& g) {
+    const auto& P = palOf(*this);
+    g.setColour(P.ink);
+    g.setFont(ui::font(13.0f, true));
+    g.drawText("Pick a skin. Auto follows your computer's dark mode, and new AcidBox instances open with your last choice.",
+               getLocalBounds().reduced(14, 10).removeFromTop(22), juce::Justification::centredLeft);
+
+    auto preview = [&](const ui::Palette& q, juce::Rectangle<float> r) {
+        g.setColour(q.bg);
+        g.fillRoundedRectangle(r, 10.0f);
+        const auto strip = r.withTrimmedTop(r.getHeight() * 0.55f).reduced(6.0f, 6.0f);
+        g.setColour(q.panel);
+        g.fillRoundedRectangle(strip, 5.0f);
+        const float cw = (strip.getWidth() - 10.0f) / 4.0f;
+        for (int k = 0; k < 4; ++k) {
+            g.setColour(k == 1 ? q.led : q.cell);
+            g.fillRoundedRectangle(strip.getX() + 3.0f + k * (cw + 1.3f), strip.getY() + 4.0f, cw - 1.0f, strip.getHeight() - 8.0f, 3.0f);
+        }
+        const float kr = 10.0f, kx = r.getX() + 18.0f, ky = r.getY() + 16.0f;
+        g.setColour(q.knobBody);
+        g.fillEllipse(kx - kr, ky - kr, kr * 2, kr * 2);
+        g.setColour(q.knobMark);
+        g.drawLine(kx, ky, kx + 5.0f, ky - 6.0f, 2.0f);
+        g.setColour(q.ink);
+        g.fillRoundedRectangle(r.getX() + 36.0f, r.getY() + 11.0f, 40.0f, 4.0f, 2.0f);
+        g.setColour(q.soft);
+        g.fillRoundedRectangle(r.getX() + 36.0f, r.getY() + 19.0f, 28.0f, 3.0f, 1.5f);
+    };
+
+    for (size_t i = 0; i < swatches.size(); ++i) {
+        const auto box = swatches[i];
+        const auto pr = box.withHeight(66).toFloat();
+        if (i == 0) {
+            {
+                juce::Graphics::ScopedSaveState ss(g);
+                g.reduceClipRegion(box.withWidth(box.getWidth() / 2));
+                preview(ui::resolve(0, false), pr);
+            }
+            juce::Graphics::ScopedSaveState ss(g);
+            g.reduceClipRegion(box.withTrimmedLeft(box.getWidth() / 2));
+            preview(ui::resolve(0, true), pr);
+        } else {
+            preview(ui::skins()[i].pal, pr);
+        }
+        g.setColour(P.ink.withAlpha(0.25f));
+        g.drawRoundedRectangle(pr.reduced(0.5f), 10.0f, 1.0f);
+        if ((int) i == selected) {
+            g.setColour(P.led);
+            g.drawRoundedRectangle(pr.expanded(2.0f), 12.0f, 3.0f);
+        }
+        g.setColour(P.ink);
+        g.setFont(ui::font(12.0f, (int) i == selected));
+        g.drawText(ui::skins()[i].name, box.withTrimmedTop(70), juce::Justification::centred);
+    }
+}
+
+void SkinPage::mouseDown(const juce::MouseEvent& e) {
+    for (size_t i = 0; i < swatches.size(); ++i)
+        if (swatches[i].contains(e.getPosition())) {
+            selected = (int) i;
+            if (onPick) onPick((int) i);
+            repaint();
+            return;
+        }
 }
 
 AcidBoxEditor::~AcidBoxEditor() {
@@ -490,6 +620,7 @@ AcidBoxEditor::~AcidBoxEditor() {
 void AcidBoxEditor::showMidiMenu() {
     auto pname = [this](int i) { auto* prm = proc.param(i); return prm != nullptr ? prm->getName(40) : juce::String(); };
     juce::PopupMenu m;
+    m.setLookAndFeel(&getLookAndFeel());
     const auto mine = proc.learnedList();
     if (!mine.empty()) {
         m.addSectionHeader("Your mappings (click one to forget it)");
@@ -515,8 +646,9 @@ void AcidBoxEditor::showMidiMenu() {
 }
 
 void AcidBoxEditor::paint(juce::Graphics& g) {
-    g.fillAll(ui::butter);
-    g.setColour(ui::ink);
+    const auto& P = look.pal;
+    g.fillAll(P.bg);
+    g.setColour(P.ink);
     g.setFont(ui::font(28.0f, true));
     g.drawText("ACIDBOX", 16, 8, 160, 40, juce::Justification::centredLeft);
 }
@@ -561,4 +693,11 @@ void AcidBoxEditor::timerCallback() {
     else s = "Play MIDI notes to take over the bass line";
     if (status.getText() != s) status.setText(s, juce::dontSendNotification);
     seqView.sync();
+
+    const int skin = proc.skinIndex.load();
+    if (skin >= 0 && skin != skinPage.selected) applySkin(skin);
+    else if (skin <= 0 && juce::Time::getMillisecondCounter() >= nextDarkCheck) {
+        nextDarkCheck = juce::Time::getMillisecondCounter() + 1000;
+        if (juce::Desktop::getInstance().isDarkModeActive() != appliedDark) applySkin(0);
+    }
 }

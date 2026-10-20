@@ -403,6 +403,7 @@ void AcidBoxProcessor::getStateInformation(juce::MemoryBlock& destData) {
     juce::String map;
     for (const auto& [cc, idx] : learnedList()) map << cc << ":" << allParams[(size_t) idx]->getParameterID() << " ";
     seqTree.setProperty("learned", map.trim(), nullptr);
+    if (skinIndex.load() >= 0) seqTree.setProperty("skin", skinIndex.load(), nullptr);
     state.appendChild(seqTree, nullptr);
     if (auto xml = state.createXml()) copyXmlToBinary(*xml, destData);
 }
@@ -423,6 +424,7 @@ void AcidBoxProcessor::setStateInformation(const void* data, int sizeInBytes) {
             if (cc >= 0 && cc < 120 && idx >= 0) learned[(size_t) cc] = idx;
         }
         ++mapVersion;
+        if (s.hasProperty("skin")) skinIndex = (int) s.getProperty("skin");
         tree.removeChild(s, nullptr);
     }
     apvts.replaceState(tree);
