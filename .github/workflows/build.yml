@@ -14,11 +14,11 @@ jobs:
       matrix:
         include:
           - { name: Windows, os: windows-latest }
-          - { name: macOS, os: macos-latest }
-          - { name: Linux, os: ubuntu-22.04 }
+          #- { name: macOS, os: macos-latest }
+          #- { name: Linux, os: ubuntu-22.04 }
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Linux libraries
         if: runner.os == 'Linux'
@@ -59,7 +59,7 @@ jobs:
           fi
 
       # zipped first so the Mac and Linux executables keep their permissions
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: AcidBox-${{ matrix.name }}
           path: AcidBox-${{ matrix.name }}.zip
