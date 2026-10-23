@@ -331,14 +331,14 @@ public:
             const double nz = random() * 2 - 1;
             if (kAmp > 1e-4) {
                 kPh += (kBase + kSweepHz * kPit) / sr; if (kPh >= 1) kPh -= 1;
-                kickPart = std::tanh((std::sin(2 * PI * kPh) * kAmp + nz * kClick * kClickAmt) * kDrv) * 0.95 * gK;
+                kickPart = std::tanh((std::sin(2 * PI * kPh) * kAmp + nz * kClick * kClickAmt) * kDrv) * 0.95 * gK * kVel;
                 drum += kickPart;
                 kAmp *= kAmpC; kPit *= kPitC; kClick *= clickC;
             }
             if (sTone > 1e-4 || sNoise > 1e-4) {
                 sPh += sHz / sr; if (sPh >= 1) sPh -= 1;
                 const double hp = svf(fS, nz);
-                snarePart = (std::sin(2 * PI * sPh) * sTone * sToneAmt + hp * sNoise * sNoiseAmt) * gS;
+                snarePart = (std::sin(2 * PI * sPh) * sTone * sToneAmt + hp * sNoise * sNoiseAmt) * gS * sVel;
                 drum += snarePart;
                 sTone *= sToneC; sNoise *= sNoiseC;
             }
@@ -359,19 +359,19 @@ public:
                 const double t = cT / sr;
                 const double e = t < cHit ? std::exp(-std::fmod(t, cSp) / 0.003) : std::exp(-(t - cHit) / cTail);
                 svf(fC, nz);
-                drum += fC.bp * e * 1.6 * gC;
+                drum += fC.bp * e * 1.6 * gC * cVel;
                 cT++; if (t > cEnd) cT = -1;
             }
             if (ch > 1e-4) {
                 double metal = 0;
                 for (int j = 0; j < 6; ++j) { hPh[j] += chInc[j]; if (hPh[j] >= 1) hPh[j] -= 1; metal += hPh[j] < 0.5 ? 1 : -1; }
-                drum += svf(fH, metal * chM + nz * chN) * ch * gCH * 0.5;
+                drum += svf(fH, metal * chM + nz * chN) * ch * gCH * 0.5 * chVel;
                 ch *= chC;
             }
             if (oh > 1e-4) {
                 double metal = 0;
                 for (int j = 0; j < 6; ++j) { hPh2[j] += ohInc[j]; if (hPh2[j] >= 1) hPh2[j] -= 1; metal += hPh2[j] < 0.5 ? 1 : -1; }
-                drum += svf(fH2, metal * ohM + nz * ohN) * oh * gOH * 0.5;
+                drum += svf(fH2, metal * ohM + nz * ohN) * oh * gOH * 0.5 * ohVel;
                 oh *= ohC;
             }
 
@@ -405,12 +405,13 @@ public:
         }
     }
 
-    void trigDrums(int m) {
-        if (m & Kick) { kAmp = 1; kPit = 1; kClick = 1; kPh = 0; duckAtk = true; }
-        if (m & Snare) { sTone = 1; sNoise = 1; }
-        if (m & Clap) { cT = 0; }
-        if (m & ClosedHat) { ch = 1; oh = 0; }
-        if (m & OpenHat) { oh = 1; }
+    // v is the hit's loudness: 1 for grid hits, MIDI velocity / 127 for hits played from the DAW
+    void trigDrums(int m, double v = 1) {
+        if (m & Kick) { kAmp = 1; kPit = 1; kClick = 1; kPh = 0; duckAtk = true; kVel = v; }
+        if (m & Snare) { sTone = 1; sNoise = 1; sVel = v; }
+        if (m & Clap) { cT = 0; cVel = v; }
+        if (m & ClosedHat) { ch = 1; oh = 0; chVel = v; }
+        if (m & OpenHat) { oh = 1; ohVel = v; }
     }
 
 private:
@@ -431,6 +432,7 @@ private:
     double cGr = 0;   // compressor gain reduction (dB)
     double kAmp = 0, kPit = 0, kClick = 0, kPh = 0, sTone = 0, sNoise = 0, sPh = 0, cT = -1, ch = 0, oh = 0;
     double hPh[6] = {}, hPh2[6] = {};
+    double kVel = 1, sVel = 1, cVel = 1, chVel = 1, ohVel = 1;
     const double hF[6] = {420, 640, 674, 850, 941, 1352};
     Svf fS, fC, fH, fH2;
 

@@ -50,6 +50,7 @@ public:
     void setPalette(const ui::Palette& p);
     ui::Palette pal;
     void drawRotarySlider(juce::Graphics&, int x, int y, int w, int h, float pos, float startA, float endA, juce::Slider&) override;
+    void drawCornerResizer(juce::Graphics&, int w, int h, bool isMouseOver, bool isMouseDragging) override;
 };
 
 using APVTS = juce::AudioProcessorValueTreeState;
@@ -134,6 +135,8 @@ public:
         return *x;
     }
     void resized() override;
+    // how tall this page must be to show every section at the given width, wrapping like the layout does
+    int requiredHeight(int width) const;
 private:
     AcidBoxProcessor& proc;
     juce::OwnedArray<Section> sections;
@@ -168,6 +171,19 @@ private:
 
     AcidBoxProcessor& proc;
     AcidLook look;
+
+    // everything is laid out at the base size on `body`, then scaled to whatever size the window is dragged to
+    struct Body : juce::Component {
+        std::function<void(juce::Graphics&)> onPaint;
+        std::function<void()> onResize;
+        void paint(juce::Graphics& g) override { if (onPaint) onPaint(g); }
+        void resized() override { if (onResize) onResize(); }
+    };
+    Body body;
+    static constexpr int baseW = 1040;
+    int baseH = 720, tabsH = 268;
+    void layoutBody();
+
     void showMidiMenu();
     void applySkin(int index);
     bool appliedDark = false;

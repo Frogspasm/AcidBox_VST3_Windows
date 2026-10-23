@@ -85,6 +85,15 @@ void AcidLook::drawRotarySlider(juce::Graphics& g, int x, int y, int w, int h, f
                c.x + std::sin(ang) * (br - 3), c.y - std::cos(ang) * (br - 3), 2.5f);
 }
 
+// the window's resize grip: three diagonal ridges in the skin's ink, brighter under the mouse
+// (JUCE's default grip is drawn in near-black, which disappears on the dark skins)
+void AcidLook::drawCornerResizer(juce::Graphics& g, int w, int h, bool isMouseOver, bool isMouseDragging) {
+    const float size = (float) juce::jmin(w, h);
+    g.setColour((isMouseOver || isMouseDragging) ? pal.led : pal.ink.withAlpha(0.7f));
+    for (float k = 0.25f; k < 1.0f; k += 0.25f)
+        g.drawLine((float) w - size * k, (float) h - 2.0f, (float) w - 2.0f, (float) h - size * k, 2.0f);
+}
+
 // ---------------------------------------------------------------- knobs and sections
 Knob::Knob(AcidBoxProcessor& p, const juce::String& id, const juce::String& label)
     : proc(p), paramId(id), index(p.paramIndex(id)) {
@@ -192,6 +201,17 @@ void Section::resized() {
     auto r = getLocalBounds().reduced(6);
     r.removeFromTop(18);
     for (int i = 0; i < items.size(); ++i) items[i]->setBounds(r.removeFromLeft(widths[(size_t) i]));
+}
+
+int Page::requiredHeight(int width) const {
+    const int avail = width - 8;   // the layout insets the page by 4 px on each side
+    int rows = 0, x = 0;
+    for (auto* s : sections) {
+        const int w = s->preferredWidth() + 8;   // plus a 4 px margin each side
+        if (rows == 0 || x + w > avail) { ++rows; x = 0; }
+        x += w;
+    }
+    return rows * (Section::preferredHeight + 8) + 8;
 }
 
 void Page::resized() {
@@ -375,7 +395,7 @@ void SeqView::paint(juce::Graphics& g) {
     g.setColour(P.soft);
     g.setFont(ui::font(11.0f));
     g.drawText("Click a step, then a key to set its note. Click a song bar to change its bass pattern, right-click for its drums. "
-               "MIDI notes from your DAW play the bass live.",
+               "MIDI notes play the bass live; channel 10 plays the drums.",
                hintArea, juce::Justification::centredLeft);
 }
 
@@ -456,11 +476,20 @@ void SeqView::sync() {
 AcidBoxEditor::AcidBoxEditor(AcidBoxProcessor& p)
     : AudioProcessorEditor(&p), proc(p), bassPage(p), fxPage(p), drumPage(p), seqView(p) {
     setLookAndFeel(&look);
+    addAndMakeVisible(body);
+    body.onPaint = [this](juce::Graphics& g) {
+        const auto& P = look.pal;
+        g.fillAll(P.bg);
+        g.setColour(P.ink);
+        g.setFont(ui::font(28.0f, true));
+        g.drawText("ACIDBOX", 16, 8, 160, 40, juce::Justification::centredLeft);
+    };
+    body.onResize = [this] { layoutBody(); };
 
-    bassPage.section("Bass").knob("tune", "Tune").knob("cutoff", "Cutoff").knob("reso", "Resonance").knob("envmod", "Env mod")
-        .knob("decay", "Decay").knob("accent", "Accent").knob("drive", "Drive");
+    bassPage.section("Bass").knob("blevel", "Vol").knob("tune", "Tune").knob("cutoff", "Cutoff").knob("reso", "Resonance")
+        .knob("envmod", "Env mod").knob("decay", "Decay").knob("accent", "Accent").knob("drive", "Drive");
     bassPage.section("Oscillators").choice("wave", "Osc 1").choice("wave2", "Osc 2").choice("interval", "Interval")
-        .knob("morph", "Morph").knob("detune", "Detune").knob("blevel", "Bass vol");
+        .knob("morph", "Morph").knob("detune", "Detune");
 
     fxPage.section("Distortion").choice("dtype", "Type").knob("dist", "Amount").knob("dtone", "Tone").knob("dmix", "Mix");
     fxPage.section("Ring mod").choice("rmode", "Mode", 104).knob("ring", "Amount").knob("rpitch", "Pitch");
@@ -485,34 +514,47 @@ AcidBoxEditor::AcidBoxEditor(AcidBoxProcessor& p)
     skinPage.onPick = [this](int i) { applySkin(i); };
     tabs.setTabBarDepth(28);
     tabs.setOutline(0);
-    addAndMakeVisible(tabs);
-    addAndMakeVisible(seqView);
+    body.addAndMakeVisible(tabs);
+    body.addAndMakeVisible(seqView);
 
     playBtn.onClick = [this] { if (!proc.hostDriven.load()) proc.internalPlay = !proc.internalPlay.load(); };
-    addAndMakeVisible(playBtn);
+    body.addAndMakeVisible(playBtn);
     midiBtn.onClick = [this] { showMidiMenu(); };
-    addAndMakeVisible(midiBtn);
+    body.addAndMakeVisible(midiBtn);
 
-    addAndMakeVisible(syncBtn);
+    body.addAndMakeVisible(syncBtn);
     syncAttach = std::make_unique<APVTS::ButtonAttachment>(proc.apvts, "hostsync", syncBtn);
 
     tempo.setSliderStyle(juce::Slider::LinearHorizontal);
     tempo.setTextBoxStyle(juce::Slider::TextBoxRight, false, 72, 20);
-    addAndMakeVisible(tempo);
+    body.addAndMakeVisible(tempo);
     tempoAttach = std::make_unique<APVTS::SliderAttachment>(proc.apvts, "tempo", tempo);
     tempoLabel.setText("Tempo", juce::dontSendNotification);
     tempoLabel.setFont(ui::font(13.0f, true));
-    addAndMakeVisible(tempoLabel);
+    body.addAndMakeVisible(tempoLabel);
     status.setFont(ui::font(12.0f));
     status.setJustificationType(juce::Justification::centredRight);
     status.setMinimumHorizontalScale(0.6f);
-    addAndMakeVisible(status);
+    body.addAndMakeVisible(status);
 
     int skin = proc.skinIndex.load();
     if (skin < 0) skin = settingsFile()->getIntValue("skin", 0);
     applySkin(skin);
 
-    setSize(1040, 720);
+    // the window grows to fit the tallest knob tab: two rows of sections is the standard 720 px window
+    const int pagesH = juce::jmax(240, bassPage.requiredHeight(baseW - 12), fxPage.requiredHeight(baseW - 12), drumPage.requiredHeight(baseW - 12));
+    tabsH = 28 + pagesH;
+    baseH = 56 + tabsH + 396;
+    body.setSize(baseW, baseH);
+
+    // drag the corner to resize; everything scales together, keeping the shape
+    float scale = proc.uiScale.load();
+    if (scale <= 0.0f) scale = (float) settingsFile()->getDoubleValue("scale", 1.0);
+    scale = juce::jlimit(0.6f, 2.0f, scale);
+    setResizable(true, true);
+    setResizeLimits(juce::roundToInt(baseW * 0.6), juce::roundToInt(baseH * 0.6), baseW * 2, baseH * 2);
+    if (auto* c = getConstrainer()) c->setFixedAspectRatio((double) baseW / (double) baseH);
+    setSize(juce::roundToInt(baseW * scale), juce::roundToInt(baseH * scale));
     startTimerHz(30);
 }
 
@@ -614,6 +656,11 @@ void SkinPage::mouseDown(const juce::MouseEvent& e) {
 
 AcidBoxEditor::~AcidBoxEditor() {
     stopTimer();
+    if (const float s = proc.uiScale.load(); s > 0.0f) {   // new instances open at the size you left this one
+        auto f = settingsFile();
+        f->setValue("scale", (double) s);
+        f->saveIfNeeded();
+    }
     setLookAndFeel(nullptr);
 }
 
@@ -629,6 +676,7 @@ void AcidBoxEditor::showMidiMenu() {
     m.addSectionHeader("Built in");
     for (const auto& [cc, idx] : proc.builtinList()) m.addItem(2000 + cc, "CC " + juce::String(cc) + "   " + pname(idx), false);
     m.addItem(3, "Notes   Play the bass; velocity 100+ adds accent", false);
+    m.addItem(6, "Channel 10   Drums: C1 kick, D1 snare, D#1 clap, F#1 closed hat, A#1 open hat", false);
     m.addItem(4, "CC 123   All notes off", false);
     m.addSeparator();
     m.addItem(5, "Right-click any knob to MIDI Learn it", false);
@@ -645,16 +693,17 @@ void AcidBoxEditor::showMidiMenu() {
     });
 }
 
-void AcidBoxEditor::paint(juce::Graphics& g) {
-    const auto& P = look.pal;
-    g.fillAll(P.bg);
-    g.setColour(P.ink);
-    g.setFont(ui::font(28.0f, true));
-    g.drawText("ACIDBOX", 16, 8, 160, 40, juce::Justification::centredLeft);
-}
+void AcidBoxEditor::paint(juce::Graphics& g) { g.fillAll(look.pal.bg); }
 
 void AcidBoxEditor::resized() {
-    auto r = getLocalBounds();
+    const float s = (float) getWidth() / (float) baseW;
+    body.setBounds(0, 0, baseW, baseH);
+    body.setTransform(juce::AffineTransform::scale(s));
+    proc.uiScale = s;
+}
+
+void AcidBoxEditor::layoutBody() {
+    auto r = body.getLocalBounds();
     auto head = r.removeFromTop(56).reduced(12, 12);
     head.removeFromLeft(168);
     playBtn.setBounds(head.removeFromLeft(88));
@@ -667,7 +716,7 @@ void AcidBoxEditor::resized() {
     midiBtn.setBounds(head.removeFromRight(64));
     head.removeFromRight(10);
     status.setBounds(head);
-    tabs.setBounds(r.removeFromTop(268).reduced(6, 0));
+    tabs.setBounds(r.removeFromTop(tabsH).reduced(6, 0));
     seqView.setBounds(r.reduced(10, 8));
 }
 

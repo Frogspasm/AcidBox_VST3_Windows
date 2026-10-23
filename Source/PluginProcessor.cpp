@@ -204,7 +204,24 @@ void AcidBoxProcessor::pushCmd(Cmd c) {
     else if (scope.blockSize2 > 0) cmds[(size_t) scope.startIndex2] = c;
 }
 
+// General MIDI drum notes on channel 10
+static int drumForNote(int note) {
+    switch (note) {
+        case 35: case 36: return acid::Kick;          // B0, C1
+        case 38: case 40: return acid::Snare;         // D1, E1
+        case 39: return acid::Clap;                   // D#1
+        case 42: case 44: return acid::ClosedHat;     // F#1, G#1
+        case 46: return acid::OpenHat;                // A#1
+        default: return 0;
+    }
+}
+
 void AcidBoxProcessor::handleMidi(const juce::MidiMessage& m) {
+    if (m.getChannel() == 10 && (m.isNoteOn() || m.isNoteOff())) {   // drums; note-offs are ignored, hits ring out
+        if (m.isNoteOn())
+            if (const int bit = drumForNote(m.getNoteNumber())) core->trigDrums(bit, (double) m.getVelocity() / 127.0);
+        return;
+    }
     if (m.isNoteOn()) core->liveOn(m.getNoteNumber(), (int) m.getVelocity());
     else if (m.isNoteOff()) core->liveOff(m.getNoteNumber());
     else if (m.isAllNotesOff() || m.isAllSoundOff()) core->allOff();
@@ -404,6 +421,7 @@ void AcidBoxProcessor::getStateInformation(juce::MemoryBlock& destData) {
     for (const auto& [cc, idx] : learnedList()) map << cc << ":" << allParams[(size_t) idx]->getParameterID() << " ";
     seqTree.setProperty("learned", map.trim(), nullptr);
     if (skinIndex.load() >= 0) seqTree.setProperty("skin", skinIndex.load(), nullptr);
+    if (uiScale.load() > 0.0f) seqTree.setProperty("scale", (double) uiScale.load(), nullptr);
     state.appendChild(seqTree, nullptr);
     if (auto xml = state.createXml()) copyXmlToBinary(*xml, destData);
 }
@@ -425,6 +443,7 @@ void AcidBoxProcessor::setStateInformation(const void* data, int sizeInBytes) {
         }
         ++mapVersion;
         if (s.hasProperty("skin")) skinIndex = (int) s.getProperty("skin");
+        if (s.hasProperty("scale")) uiScale = (float) (double) s.getProperty("scale");
         tree.removeChild(s, nullptr);
     }
     apvts.replaceState(tree);

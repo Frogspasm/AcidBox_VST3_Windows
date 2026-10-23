@@ -73,7 +73,8 @@ public:
     std::atomic<bool> internalPlay{false}, running{false}, hostDriven{false};
     std::atomic<int> uiStep{-1}, uiBarPos{-1}, uiBank{0}, uiDBank{0}, seqVersion{0};
     std::atomic<double> hostBpm{0.0};
-    std::atomic<int> skinIndex{-1};   // -1: not chosen in this project yet, use the last skin you picked
+    std::atomic<int> skinIndex{-1};
+    std::atomic<float> uiScale{0.0f};  // 0: not set in this project yet, use the last size you picked   // -1: not chosen in this project yet, use the last skin you picked
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
