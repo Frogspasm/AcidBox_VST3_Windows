@@ -38,6 +38,8 @@ Then rescan plugins in your DAW. AcidBox appears as an instrument.
 - **Hardware controllers:** right-click any knob and choose MIDI Learn, then move a knob or fader on your controller. The knob shows a small CC badge once it's mapped. The **MIDI** button lists every mapping (yours plus the built-in ones, like CC 74 for cutoff) and lets you forget them. Mappings are saved with your project.
 - The **Skins** tab has the same skins as the web version, including dark ones (Midnight, Butter Night, Concrete Night, Bubblegum Night, Lagoon). Auto follows your computer's dark mode. Your choice is saved with the project, and new AcidBox instances open with the skin you picked last.
 - The **Effects** tab has the kick + snare compressor. It's off by default, and when it's off the drums sound exactly as before.
+- **Drums from MIDI:** notes on **MIDI channel 10** play the drums, using the standard General MIDI drum notes: C1 kick, D1 snare, D♯1 clap, F♯1 closed hat, A♯1 open hat (B0, E1 and G♯1 work too). Velocity sets how hard each hit is. They mix with the drum grid, so you can play extra hits over a pattern, or clear the grid and drive the drums entirely from your DAW. Kicks from MIDI still duck the bass. Notes on any other channel play the bass.
+- **Window size:** drag the plugin window's bottom-right corner to make it bigger or smaller. Everything scales together, and AcidBox remembers the size for that project and for new instances. The window is 1040 × 720 at normal size, and grows taller on its own if your layout puts a third row of sections on any tab.
 - Every knob can be automated, and your patterns and song are saved inside your DAW project.
 
 ## Building it yourself (optional)
