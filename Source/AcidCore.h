@@ -18,14 +18,17 @@ struct Params {
     int wave = 0, wave2 = 0;
     double interval = 0, morph = 0, detune = 0.5, dlevel = 0.7, kdecay = 0.5, blevel = 0.8, duck = 0.45, ducktime = 0.4,
            reverb = 0.3, rsize = 0.5;
-    int dtype = 0;
+    int dtype = 0;   // -1: none (distortion off)
     double dist = 0, dtone = 0.6, dmix = 1, lvk = 0.8, lvs = 0.8, lvc = 0.8, lvch = 0.8, lvoh = 0.8;
-    int rmode = 0;
+    int rmode = 0;   // -1: none (ring mod off)
     double ring = 0, rpitch = 0.5;
     double ktune = 0.5, kpunch = 0.4, ksweep = 0.5, kclick = 0.5, kdrive = 0.5, stune = 0.5, ssnap = 0.5, stone = 0.5, sdecay = 0.5,
            ctone = 0.5, cspread = 0.5, cdecay = 0.5, chtune = 0.5, chtone = 0.5, chdecay = 0.5, chnoise = 0.5,
            ohtune = 0.5, ohtone = 0.5, ohdecay = 0.5, ohnoise = 0.5;
     int cmp = 0;   // kick + snare compressor on/off
+    int space = 1;   // echo + reverb on/off
+    int ftype = 0;   // 0: transistor ladder (the web version's filter), 1: 303-style diode ladder
+    double fslope = 1, fslopeenv = 0;   // 1 = 24 dB/oct (4th stage), 0 = 18 dB/oct (3rd stage); envelope pulls it toward 18
     double cthr = 2.0 / 3, cratio = 0.4, catk = 0.741, crel = 0.431, cgain = 1.0 / 3, cmix = 1;
 };
 
@@ -45,7 +48,7 @@ inline const FloatField kFloatFields[] = {
     {"chtone", &Params::chtone}, {"chdecay", &Params::chdecay}, {"chnoise", &Params::chnoise}, {"ohtune", &Params::ohtune},
     {"ohtone", &Params::ohtone}, {"ohdecay", &Params::ohdecay}, {"ohnoise", &Params::ohnoise},
     {"cthr", &Params::cthr}, {"cratio", &Params::cratio}, {"catk", &Params::catk}, {"crel", &Params::crel},
-    {"cgain", &Params::cgain}, {"cmix", &Params::cmix},
+    {"cgain", &Params::cgain}, {"cmix", &Params::cmix}, {"fslope", &Params::fslope}, {"fslopeenv", &Params::fslopeenv},
 };
 
 // the sequencer data the editor changes and the engine plays
@@ -187,7 +190,7 @@ public:
         const double nyq = 0.45 * sr;
         const double drive = 1 + p.drive * 7, dGain = 0.75 - p.drive * 0.3;
         const double mix = p.delay * 0.7;
-        const double dAmt = p.dist; const bool dOn = dAmt > 0.002; const int dType = p.dtype; const double dMix = p.dmix;
+        const double dAmt = p.dist; const int dType = p.dtype; const bool dOn = dType >= 0 && dAmt > 0.002; const double dMix = p.dmix;
         const double dPre = dType == 0 ? 1 + dAmt * dAmt * 24 : dType == 1 ? 2 + dAmt * dAmt * 60 : 1 + dAmt * 6;
         const double trims[4] = {0.52, 0.5, 0.7, 1};
         const double dOut = 1 + ((dType >= 0 && dType < 4 ? trims[dType] : 0.52) - 1) * std::min(1.0, dAmt * 5);
@@ -196,7 +199,7 @@ public:
         const double crushHold = std::max(1.0, jsRound((1 + dAmt * dAmt * 20) * sr / 44100));
         const double ratio2 = std::pow(2.0, (p.interval * 100 + (p.detune - 0.5) * 100) / 1200);
         const double m1 = std::cos(p.morph * PI / 2), m2 = std::sin(p.morph * PI / 2);
-        const double rAmt = p.ring; const int rMode = p.rmode;
+        const double rAmt = p.ring; const int rMode = p.rmode; const bool rOn = rMode >= 0 && rAmt > 0.002;
         const double rDry = std::cos(rAmt * PI / 2), rWet = std::sin(rAmt * PI / 2);
         const double rRatio = std::pow(2.0, (p.rpitch - 0.5) * 4);
         const double rFixed = 20 * std::pow(2.0, p.rpitch * 7);
@@ -229,8 +232,17 @@ public:
         const double duckAmt = p.duck * 0.9 * std::min(1.0, p.dlevel * 5);
         const double duckAtkC = std::exp(-1 / (0.002 * sr));
         const double duckRelC = std::exp(-1 / ((0.04 + p.ducktime * 0.36) * sr));
+        const bool diode = p.ftype == 1;
         const double revMix = p.reverb * 1.8;
         const double revFb = 0.72 + p.rsize * 0.26;
+        // Space switch: when off, the echo and reverb don't run at all. Turning it back on starts from silence.
+        const bool spaceOn = p.space != 0;
+        if (spaceOn && !spaceWasOn) {
+            std::fill(dbuf.begin(), dbuf.end(), 0.0f);
+            dpos = 0; dlSleep = true; dlQuiet = 0;
+            clearReverb(); rvSleep = true; rvQuiet = 0;
+        }
+        spaceWasOn = spaceOn;
         // kick + snare compressor (soft 6 dB knee). When it's off, the drums take the original path untouched.
         const bool cOn = p.cmp != 0;
         const double cThr = -36 + p.cthr * 36, cSlope = 1 - 1 / (1 + 19 * p.cratio * p.cratio);
@@ -257,7 +269,7 @@ public:
             if (awake) {
                 if (m1 > 0.001) osc += wave(p.wave, phase, dt) * m1;
                 if (m2 > 0.001) osc += wave(p.wave2, phase2, dt2) * m2;
-                if (rAmt > 0.002) {
+                if (rOn) {
                     if (rMode == 2) {
                         const double prod = wave(p.wave, phase, dt) * wave(p.wave2, phase2, dt2);
                         osc = osc * rDry + prod * rWet * 1.7;
@@ -280,20 +292,31 @@ public:
             double sig = 0;
             if (awake) {
                 double fc = 40 * std::pow(2.0, cutS * 7.5 + p.envmod * 4.5 * fenv + acc * 2.5 * accEnv);
-                if (fc > nyq) fc = nyq;
-                const double g = std::tan(PI * fc / sr);
-                const double G = g / (1 + g);
                 const double k = resS * 3.9;
-                double x = std::tanh(osc - k * last);
-                for (int j = 0; j < 4; ++j) {
-                    const double v = (x - stg[j]) * G;
-                    const double y = v + stg[j];
-                    stg[j] = y + v;
-                    x = y;
+                double x, x3, comp = 1;
+                if (!diode) {
+                    if (fc > nyq) fc = nyq;
+                    const double g = std::tan(PI * fc / sr);
+                    const double G = g / (1 + g);
+                    x = std::tanh(osc - k * last);
+                    x3 = 0;
+                    for (int j = 0; j < 4; ++j) {
+                        const double v = (x - stg[j]) * G;
+                        const double y = v + stg[j];
+                        stg[j] = y + v;
+                        x = y;
+                        if (j == 2) x3 = y;
+                    }
+                    last = x;
+                } else {
+                    x = diodeStep(osc, fc, k, nyq, x3);
+                    comp = (1 + k * kDiodeK) / (1 + k);   // keep the passband as loud as the ladder's
                 }
-                last = x;
+                // Slope: blend the 3rd-stage (18 dB/oct) and 4th-stage (24 dB/oct) outputs
+                const double slope = std::clamp(p.fslope - p.fslopeenv * fenv, 0.0, 1.0);
+                if (slope < 1) x = x3 + (x - x3) * slope;
 
-                sig = x * (1 + resS * 1.3) * aenv * (1 + acc * 0.7);
+                sig = x * comp * (1 + resS * 1.3) * aenv * (1 + acc * 0.7);
                 sig = std::tanh(sig * drive) * dGain;
                 if (dOn) {
                     double w;
@@ -315,8 +338,8 @@ public:
 
             // tempo-synced echo (dotted eighth)
             double wet = 0;
-            if (dlSleep && (sig > 1e-9 || sig < -1e-9)) dlSleep = false;
-            if (!dlSleep) {
+            if (spaceOn && dlSleep && (sig > 1e-9 || sig < -1e-9)) dlSleep = false;
+            if (spaceOn && !dlSleep) {
                 int rd = dpos - dsamp; if (rd < 0) rd += dlen;
                 wet = dbuf[(size_t) rd];
                 dbuf[(size_t) dpos] = (float) (sig + wet * 0.42);
@@ -384,7 +407,7 @@ public:
             const double dry = bassOut + drumOut;
 
             double revL = 0, revR = 0;
-            if (revMix > 0.001) {
+            if (spaceOn && revMix > 0.001) {
                 const double rin = (bassOut + (drum - kickPart) * drumGain * 0.7) * 0.02;
                 const bool loud = rin > 1e-9 || rin < -1e-9;
                 if (rvSleep && loud) rvSleep = false;
@@ -430,6 +453,51 @@ private:
     int dlen = 0; std::vector<float> dbuf; int dpos = 0;
     double duckEnv = 0; bool duckAtk = false;
     double cGr = 0;   // compressor gain reduction (dB)
+    double dy[4] = {}, duPrev = 0;   // diode ladder node voltages and previous input
+    static constexpr double kDiodeK = 18.392 / 4.005;   // diode feedback needed for the same share of self-oscillation
+
+    // 303-style diode ladder. Unlike the transistor ladder, neighbouring stages load each other, which softens the
+    // slope near cutoff (about 18 dB/oct, steepening to 24 far above) and changes the resonance. Bilinear-integrated,
+    // with the resonance loop solved without a delay and the input stage saturating like the ladder's.
+    double diodeStep(double in, double fcLadder, double kLadder, double nyq, double& out3) {
+        const double kd = kLadder * kDiodeK;
+        // match the ladder's resonant peak (x0.88); with little resonance, open it up so it isn't two octaves darker
+        const double r = kLadder / 3.9;
+        const double scale = 0.88 * (1 + 3.2 * std::max(0.0, 0.3 - r) / 0.3);
+        const double fc = std::min(fcLadder * scale, nyq);
+        const double g = std::tan(PI * fc / sr);
+        // A = I - g*M is tridiagonal: diagonal 1+2g (last row 1+g), neighbours -g
+        auto solve = [g](const double rr[4], double s[4]) {
+            double cp[4], dp[4];
+            const double diag[4] = {1 + 2 * g, 1 + 2 * g, 1 + 2 * g, 1 + g};
+            cp[0] = -g / diag[0]; dp[0] = rr[0] / diag[0];
+            for (int j = 1; j < 4; ++j) {
+                const double m = diag[j] + g * cp[j - 1];
+                cp[j] = -g / m;
+                dp[j] = (rr[j] + g * dp[j - 1]) / m;
+            }
+            s[3] = dp[3];
+            for (int j = 2; j >= 0; --j) s[j] = dp[j] - cp[j] * s[j + 1];
+        };
+        const double rhs[4] = {
+            dy[0] + g * (-2 * dy[0] + dy[1]) + g * (in + duPrev),
+            dy[1] + g * (dy[0] - 2 * dy[1] + dy[2]),
+            dy[2] + g * (dy[1] - 2 * dy[2] + dy[3]),
+            dy[3] + g * (dy[2] - dy[3]),
+        };
+        const double e1[4] = {1, 0, 0, 0};
+        double s0[4], z[4];
+        solve(rhs, s0);
+        solve(e1, z);
+        // linear estimate of the output with the feedback in place, then the saturating input stage
+        const double y4 = s0[3] / (1 + g * kd * z[3]);
+        const double u = std::tanh(in - kd * y4);
+        for (int j = 0; j < 4; ++j) dy[j] = s0[j] + g * (u - in) * z[j];
+        duPrev = u;
+        out3 = dy[2];
+        return dy[3];
+    }
+    bool spaceWasOn = true;
     double kAmp = 0, kPit = 0, kClick = 0, kPh = 0, sTone = 0, sNoise = 0, sPh = 0, cT = -1, ch = 0, oh = 0;
     double hPh[6] = {}, hPh2[6] = {};
     double kVel = 1, sVel = 1, cVel = 1, chVel = 1, ohVel = 1;

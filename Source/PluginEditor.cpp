@@ -225,6 +225,26 @@ void Page::resized() {
 }
 
 // ---------------------------------------------------------------- sequencer
+int SeqView::blockHeight(SeqBlockId id) {
+    switch (id) {
+        case SeqBlockId::Patterns: return 26;
+        case SeqBlockId::BassLine: return 48 + 8 + 44;    // steps, gap, step editor
+        case SeqBlockId::Drums: return 5 * 22 - 2;         // five rows of 20 with 2 px between
+        case SeqBlockId::Song: return 30;
+        case SeqBlockId::Tips: return 18;
+    }
+    return 0;
+}
+
+int SeqView::requiredHeight() {
+    int h = 20, n = 0;   // 10 px padding top and bottom
+    for (const auto& b : kSeqLayout) {
+        if (!b.visible) continue;
+        h += blockHeight(b.id) + (b.outline ? 12 : 0) + (n++ > 0 ? 10 : 0);
+    }
+    return h;
+}
+
 void SeqView::resized() {
     const auto r = getLocalBounds().reduced(12, 10);
     const int labelW = 92;
@@ -233,46 +253,62 @@ void SeqView::resized() {
         const int x0 = gx + gw * i / 16, x1 = gx + gw * (i + 1) / 16;
         return juce::Rectangle<int>(x0 + 2, y, x1 - x0 - 4, h);
     };
-    int y = r.getY();
 
-    auto row = juce::Rectangle<int>(r.getX(), y, r.getWidth(), 26);
-    bassBankLabel = row.removeFromLeft(46);
-    for (auto& b : bassBank) { b = row.removeFromLeft(30); row.removeFromLeft(4); }
-    row.removeFromLeft(18);
-    drumBankLabel = row.removeFromLeft(56);
-    for (auto& b : drumBank) { b = row.removeFromLeft(30); row.removeFromLeft(4); }
-    clearDrums = row.removeFromRight(100); row.removeFromRight(6);
-    clearBass = row.removeFromRight(100); row.removeFromRight(18);
-    songBtn = row.removeFromRight(100); row.removeFromRight(4);
-    loopBtn = row.removeFromRight(112);
-    y += 38;
+    auto placePatterns = [&](int y) {
+        auto row = juce::Rectangle<int>(r.getX(), y, r.getWidth(), 26);
+        bassBankLabel = row.removeFromLeft(46);
+        for (auto& b : bassBank) { b = row.removeFromLeft(30); row.removeFromLeft(4); }
+        row.removeFromLeft(18);
+        drumBankLabel = row.removeFromLeft(56);
+        for (auto& b : drumBank) { b = row.removeFromLeft(30); row.removeFromLeft(4); }
+        clearDrums = row.removeFromRight(100); row.removeFromRight(6);
+        clearBass = row.removeFromRight(100); row.removeFromRight(18);
+        songBtn = row.removeFromRight(100); row.removeFromRight(4);
+        loopBtn = row.removeFromRight(112);
+    };
+    auto placeBass = [&](int y) {
+        stepsLabel = {r.getX(), y, labelW, 48};
+        for (int i = 0; i < 16; ++i) steps[i] = col(i, y, 48);
+        y += 56;
+        editLabel = {r.getX(), y, labelW, 44};
+        auto ed = juce::Rectangle<int>(gx + 2, y, gw - 4, 44);
+        for (auto& k : keys) { k = ed.removeFromLeft(34); ed.removeFromLeft(3); }
+        ed.removeFromLeft(14);
+        octDown = ed.removeFromLeft(32); octLabel = ed.removeFromLeft(58); octUp = ed.removeFromLeft(32);
+        ed.removeFromLeft(14);
+        accentBtn = ed.removeFromLeft(76); ed.removeFromLeft(6);
+        slideBtn = ed.removeFromLeft(76); ed.removeFromLeft(6);
+        restBtn = ed.removeFromLeft(76);
+    };
+    auto placeDrums = [&](int y) {
+        for (int d = 0; d < 5; ++d) {
+            drumLabels[d] = {r.getX(), y + d * 22, labelW - 8, 20};
+            for (int i = 0; i < 16; ++i) drumCells[d][i] = col(i, y + d * 22, 20);
+        }
+    };
+    auto placeSong = [&](int y) {
+        songLabel = {r.getX(), y, labelW - 40, 30};
+        removeBar = {r.getX() + labelW - 38, y + 3, 30, 24};
+        for (int i = 0; i < 16; ++i) chainCells[i] = col(i, y, 30);
+    };
 
-    stepsLabel = {r.getX(), y, labelW, 48};
-    for (int i = 0; i < 16; ++i) steps[i] = col(i, y, 48);
-    y += 56;
-
-    editLabel = {r.getX(), y, labelW, 44};
-    auto ed = juce::Rectangle<int>(gx + 2, y, gw - 4, 44);
-    for (auto& k : keys) { k = ed.removeFromLeft(34); ed.removeFromLeft(3); }
-    ed.removeFromLeft(14);
-    octDown = ed.removeFromLeft(32); octLabel = ed.removeFromLeft(58); octUp = ed.removeFromLeft(32);
-    ed.removeFromLeft(14);
-    accentBtn = ed.removeFromLeft(76); ed.removeFromLeft(6);
-    slideBtn = ed.removeFromLeft(76); ed.removeFromLeft(6);
-    restBtn = ed.removeFromLeft(76);
-    y += 54;
-
-    for (int d = 0; d < 5; ++d) {
-        drumLabels[d] = {r.getX(), y + d * 22, labelW - 8, 20};
-        for (int i = 0; i < 16; ++i) drumCells[d][i] = col(i, y + d * 22, 20);
+    hintArea = {};
+    for (auto& o : outlines) o = {};
+    int y = r.getY(), n = 0;
+    for (const auto& b : kSeqLayout) {
+        if (!b.visible) continue;
+        if (b.outline) y += 6;
+        switch (b.id) {
+            case SeqBlockId::Patterns: placePatterns(y); break;
+            case SeqBlockId::BassLine: placeBass(y); break;
+            case SeqBlockId::Drums: placeDrums(y); break;
+            case SeqBlockId::Song: placeSong(y); break;
+            case SeqBlockId::Tips: hintArea = {r.getX(), y, r.getWidth(), 18}; break;
+        }
+        const int h = blockHeight(b.id);
+        if (b.outline && n < 5) outlines[n++] = juce::Rectangle<int>(r.getX(), y, r.getWidth(), h).expanded(6);
+        y += h + (b.outline ? 6 : 0) + 10;
     }
-    y += 5 * 22 + 10;
-
-    songLabel = {r.getX(), y, labelW - 40, 30};
-    removeBar = {r.getX() + labelW - 38, y + 3, 30, 24};
-    for (int i = 0; i < 16; ++i) chainCells[i] = col(i, y, 30);
-    y += 40;
-    hintArea = {r.getX(), y, r.getWidth(), 18};
 }
 
 void SeqView::paint(juce::Graphics& g) {
@@ -291,6 +327,9 @@ void SeqView::paint(juce::Graphics& g) {
 
     g.setColour(P.panel);
     g.fillRoundedRectangle(getLocalBounds().toFloat(), 12.0f);
+    g.setColour(P.ink.withAlpha(0.45f));   // same outline as the knob sections
+    for (const auto& o : outlines)
+        if (!o.isEmpty()) g.drawRoundedRectangle(o.toFloat(), 8.0f, 1.5f);
 
     auto label = [&](juce::Rectangle<int> r, const juce::String& t) {
         g.setColour(P.soft);
@@ -474,7 +513,7 @@ void SeqView::sync() {
 
 // ---------------------------------------------------------------- editor
 AcidBoxEditor::AcidBoxEditor(AcidBoxProcessor& p)
-    : AudioProcessorEditor(&p), proc(p), bassPage(p), fxPage(p), drumPage(p), seqView(p) {
+    : AudioProcessorEditor(&p), proc(p), bassPage(p), drumPage(p), seqView(p) {
     setLookAndFeel(&look);
     addAndMakeVisible(body);
     body.onPaint = [this](juce::Graphics& g) {
@@ -491,11 +530,13 @@ AcidBoxEditor::AcidBoxEditor(AcidBoxProcessor& p)
     bassPage.section("Oscillators").choice("wave", "Osc 1").choice("wave2", "Osc 2").choice("interval", "Interval")
         .knob("morph", "Morph").knob("detune", "Detune");
 
-    fxPage.section("Distortion").choice("dtype", "Type").knob("dist", "Amount").knob("dtone", "Tone").knob("dmix", "Mix");
-    fxPage.section("Ring mod").choice("rmode", "Mode", 104).knob("ring", "Amount").knob("rpitch", "Pitch");
-    fxPage.section("Space").knob("delay", "Echo").knob("reverb", "Reverb").knob("rsize", "Room size");
-    fxPage.section("Kick + snare compressor").toggle("cmp", "Comp").knob("cthr", "Threshold").knob("cratio", "Ratio")
-        .knob("catk", "Attack").knob("crel", "Release").knob("cgain", "Makeup").knob("cmix", "Mix");
+    // second row of the Bass tab
+    bassPage.section("Distortion").choice("dtype", "Type").knob("dist", "Amount").knob("dtone", "Tone").knob("dmix", "Mix");
+    bassPage.section("Ring mod").choice("rmode", "Mode", 104).knob("ring", "Amount").knob("rpitch", "Pitch");
+    bassPage.section("Space").toggle("spaceon", "Space").knob("delay", "Echo").knob("rsize", "Room size").knob("reverb", "Reverb");
+    // third row of the Bass tab
+    bassPage.section("Filter").choice("ftype", "Type").knob("fslope", "Slope").knob("fslopeenv", "Slope env");
+
 
     drumPage.section("Mix").knob("dlevel", "Drum vol").knob("duck", "Duck").knob("ducktime", "Duck time").knob("lvk", "Kick")
         .knob("lvs", "Snare").knob("lvc", "Clap").knob("lvch", "Closed hat").knob("lvoh", "Open hat");
@@ -505,10 +546,12 @@ AcidBoxEditor::AcidBoxEditor(AcidBoxProcessor& p)
     drumPage.section("Clap").knob("ctone", "Tone").knob("cspread", "Spread").knob("cdecay", "Decay");
     drumPage.section("Closed hat").knob("chtune", "Tune").knob("chtone", "Tone").knob("chdecay", "Decay").knob("chnoise", "Noise");
     drumPage.section("Open hat").knob("ohtune", "Tune").knob("ohtone", "Tone").knob("ohdecay", "Decay").knob("ohnoise", "Noise");
+    // third row of the Drums tab
+    drumPage.section("Kick + snare compressor").toggle("cmp", "Comp").knob("cthr", "Threshold").knob("cratio", "Ratio")
+        .knob("catk", "Attack").knob("crel", "Release").knob("cgain", "Makeup").knob("cmix", "Mix");
 
     const auto tabBg = look.pal.panel;
     tabs.addTab("Bass", tabBg, &bassPage, false);
-    tabs.addTab("Effects", tabBg, &fxPage, false);
     tabs.addTab("Drums", tabBg, &drumPage, false);
     tabs.addTab("Skins", tabBg, &skinPage, false);
     skinPage.onPick = [this](int i) { applySkin(i); };
@@ -542,9 +585,9 @@ AcidBoxEditor::AcidBoxEditor(AcidBoxProcessor& p)
     applySkin(skin);
 
     // the window grows to fit the tallest knob tab: two rows of sections is the standard 720 px window
-    const int pagesH = juce::jmax(240, bassPage.requiredHeight(baseW - 12), fxPage.requiredHeight(baseW - 12), drumPage.requiredHeight(baseW - 12));
+    const int pagesH = juce::jmax(240, bassPage.requiredHeight(baseW - 12), drumPage.requiredHeight(baseW - 12));
     tabsH = 28 + pagesH;
-    baseH = 56 + tabsH + 396;
+    baseH = 56 + tabsH + juce::jmax(380, SeqView::requiredHeight()) + 16;   // the sequencer area grows if its blocks need more room
     body.setSize(baseW, baseH);
 
     // drag the corner to resize; everything scales together, keeping the shape

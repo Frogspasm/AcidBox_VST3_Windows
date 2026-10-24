@@ -142,9 +142,22 @@ private:
     juce::OwnedArray<Section> sections;
 };
 
+// The sequencer area is a stack of blocks, top to bottom, in this order (set from the layout editor).
+enum class SeqBlockId { Patterns, BassLine, Drums, Song, Tips };
+struct SeqBlock { SeqBlockId id; bool outline; bool visible; };
+inline constexpr SeqBlock kSeqLayout[] = {
+    {SeqBlockId::Drums, true, true},
+    {SeqBlockId::BassLine, true, true},
+    {SeqBlockId::Patterns, true, true},
+    {SeqBlockId::Song, true, true},
+    {SeqBlockId::Tips, false, true},
+};
+
 // step sequencer, drum grid and song chain, all drawn by hand
 class SeqView : public juce::Component {
 public:
+    static int blockHeight(SeqBlockId id);
+    static int requiredHeight();   // padding plus every visible block, its outline space and the gaps between
     explicit SeqView(AcidBoxProcessor& p) : proc(p) {}
     void paint(juce::Graphics&) override;
     void resized() override;
@@ -158,6 +171,7 @@ private:
     juce::Rectangle<int> bassBankLabel, drumBankLabel, bassBank[4], drumBank[4], loopBtn, songBtn, clearBass, clearDrums;
     juce::Rectangle<int> stepsLabel, steps[16], editLabel, keys[13], octDown, octLabel, octUp, accentBtn, slideBtn, restBtn;
     juce::Rectangle<int> drumLabels[5], drumCells[5][16], songLabel, removeBar, chainCells[16], hintArea;
+    juce::Rectangle<int> outlines[5];   // one per block that has an outline
 };
 
 class AcidBoxEditor : public juce::AudioProcessorEditor, private juce::Timer {
@@ -198,7 +212,7 @@ private:
     juce::Label tempoLabel, status;
     std::unique_ptr<APVTS::ButtonAttachment> syncAttach;
     std::unique_ptr<APVTS::SliderAttachment> tempoAttach;
-    Page bassPage, fxPage, drumPage;
+    Page bassPage, drumPage;
     juce::TabbedComponent tabs{juce::TabbedButtonBar::TabsAtTop};
     SeqView seqView;
 

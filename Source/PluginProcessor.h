@@ -105,6 +105,8 @@ private:
     std::atomic<float>* pRmode = nullptr;
     std::atomic<float>* pSync = nullptr;
     std::atomic<float>* pCmp = nullptr;
+    std::atomic<float>* pSpace = nullptr;
+    std::atomic<float>* pFtype = nullptr;
 
     juce::AbstractFifo fifo{128};
     std::array<Cmd, 128> cmds{};

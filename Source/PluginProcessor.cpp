@@ -95,6 +95,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout AcidBoxProcessor::createLayo
         {"crel", "Comp Release", 0.431f, [](float v, int) { return juce::String(juce::roundToInt(20 * std::pow(25.0, v))) + " ms"; }},
         {"cgain", "Comp Makeup", 1.0f / 3.0f, [](float v, int) { return "+" + juce::String(v * 18, 1) + " dB"; }},
         {"cmix", "Comp Mix", 1.0f, pct()},
+        {"fslope", "Filter Slope", 1.0f, [](float v, int) { return juce::String(18 + 6 * v, 1) + " dB"; }},
+        {"fslopeenv", "Filter Slope Env", 0.0f, offPct()},
     };
     for (const auto& d : defs)
         layout.add(std::make_unique<juce::AudioParameterFloat>(
@@ -106,16 +108,20 @@ juce::AudioProcessorValueTreeState::ParameterLayout AcidBoxProcessor::createLayo
     layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{"wave2", 1}, "Osc 2 Wave", waves, 0));
     layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{"interval", 1}, "Osc 2 Interval",
                                                             juce::StringArray{"-1 oct", "Unison", "+5th", "+1 oct"}, 1));
+    // "None" switches the effect off completely (index 0, the engine's -1)
     layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{"dtype", 1}, "Dist Type",
-                                                            juce::StringArray{"Overdrive", "Fuzz", "Fold", "Crush"}, 0));
+                                                            juce::StringArray{"None", "Overdrive", "Fuzz", "Fold", "Crush"}, 0));
     layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{"rmode", 1}, "Ring Mode",
-                                                            juce::StringArray{"Follow note", "Fixed", "Osc 1 x 2"}, 0));
+                                                            juce::StringArray{"None", "Follow note", "Fixed", "Osc 1 x 2"}, 0));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"tempo", 1}, "Tempo", juce::NormalisableRange<float>(40.0f, 220.0f, 1.0f), 125.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction(
             [](float v, int) { return juce::String(juce::roundToInt(v)) + " BPM"; })));
     layout.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"hostsync", 1}, "Sync to Host", true));
     layout.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"cmp", 1}, "Comp On", false));
+    layout.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{"spaceon", 1}, "Space On", true));
+    layout.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{"ftype", 1}, "Filter Type",
+                                                            juce::StringArray{"Ladder", "Diode (303)"}, 0));
     return layout;
 }
 
@@ -136,6 +142,8 @@ AcidBoxProcessor::AcidBoxProcessor()
     pRmode = apvts.getRawParameterValue("rmode");
     pSync = apvts.getRawParameterValue("hostsync");
     pCmp = apvts.getRawParameterValue("cmp");
+    pSpace = apvts.getRawParameterValue("spaceon");
+    pFtype = apvts.getRawParameterValue("ftype");
 
     for (auto* p : getParameters())
         if (auto* r = dynamic_cast<juce::RangedAudioParameter*>(p)) allParams.push_back(r);
@@ -265,8 +273,10 @@ void AcidBoxProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     c.p.wave = juce::jlimit(0, 4, (int) pWave->load());
     c.p.wave2 = juce::jlimit(0, 4, (int) pWave2->load());
     c.p.interval = kIntervals[juce::jlimit(0, 3, (int) pInterval->load())];
-    c.p.dtype = juce::jlimit(0, 3, (int) pDtype->load());
-    c.p.rmode = juce::jlimit(0, 2, (int) pRmode->load());
+    c.p.dtype = juce::jlimit(0, 4, (int) pDtype->load()) - 1;
+    c.p.rmode = juce::jlimit(0, 3, (int) pRmode->load()) - 1;
+    c.p.space = pSpace->load() > 0.5f ? 1 : 0;
+    c.p.ftype = juce::jlimit(0, 1, (int) pFtype->load());
     c.p.cmp = pCmp->load() > 0.5f ? 1 : 0;
 
     // clicks from the editor (note audition, drum preview)
